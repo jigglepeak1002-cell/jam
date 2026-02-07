@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bear Maze – Mobile Sprite Fixed</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<style>
+:root {
+  --vh: 1vh;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #000;
+  overflow: hidden;
+  font-family: Arial, sans-serif;
+  touch-action: manipulation;
+}
+
+/* GAME LAYOUT */
+#game {
+  height: calc(var(--vh) * 100);
+  display: flex;
+  flex-direction: column;
+}
+
+/* CANVAS AREA */
+#canvasWrap {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #000;
+}
+
+canvas {
+  background: #111;
+}
+
+/* CONTROLS – GUARANTEED VISIBLE */
+.controls {
+  height: 120px;
+  background: #000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  border-top: 2px solid #222;
+}
+
+.controls button {
+  width: 74px;
+  height: 74px;
+  font-size: 32px;
+  border-radius: 50%;
+  border: none;
+  background: #222;
+  color: #fff;
+}
+
+.controls button:active {
+  background: #666;
+}
+</style>
+</head>
+
+<body>
+
+<div id="game">
+  <div id="canvasWrap">
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <div class="controls">
+    <button data-dir="left">⬅</button>
+    <button data-dir="up">⬆</button>
+    <button data-dir="down">⬇</button>
+    <button data-dir="right">➡</button>
+  </div>
+</div>
+
+<script>
+/* ---------- MOBILE VH FIX ---------- */
+function fixVH() {
+  document.documentElement.style.setProperty(
+    "--vh",
+    window.innerHeight * 0.01 + "px"
+  );
+}
+window.addEventListener("resize", fixVH);
+fixVH();
+
+/* ---------- CANVAS ---------- */
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+function resizeCanvas() {
+  const size = Math.min(
+    window.innerWidth,
+    window.innerHeight - 120
+  );
+  canvas.width = size;
+  canvas.height = size;
+}
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+
+/* ---------- SPRITES ---------- */
+const bg = new Image();
+const babyBear = new Image();
+const motherBear = new Image();
+
+/* SIMPLE PLACEHOLDER SPRITES (REPLACE WITH YOUR OWN PNGs) */
+bg.src =
+"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='512' height='512'><rect width='100%' height='100%' fill='%23222811'/></svg>";
+
+babyBear.src =
+"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><circle cx='32' cy='32' r='22' fill='%238B4513'/></svg>";
+
+motherBear.src =
+"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80'><circle cx='40' cy='40' r='28' fill='%23FFD700'/></svg>";
+
+/* ---------- MAZE ---------- */
+const SIZE = 21;
+let TILE;
+
+const maze = Array.from({ length: SIZE }, () => Array(SIZE).fill(1));
+
+function carve(x, y) {
+  maze[y][x] = 0;
+  const dirs = [[2,0],[-2,0],[0,2],[0,-2]].sort(()=>Math.random()-0.5);
+  for (const [dx, dy] of dirs) {
+    const nx = x + dx, ny = y + dy;
+    if (nx>0 && ny>0 && nx<SIZE-1 && ny<SIZE-1 && maze[ny][nx]===1) {
+      maze[y+dy/2][x+dx/2] = 0;
+      carve(nx, ny);
+    }
+  }
+}
+carve(1,1);
+
+const player = { x:1, y:1 };
+const mother = { x:SIZE-2, y:SIZE-2 };
+
+/* ---------- GAME LOOP ---------- */
+let moveDir = null;
+let lastMove = 0;
+
+function move(dx, dy) {
+  const nx = player.x + dx;
+  const ny = player.y + dy;
+  if (maze[ny]?.[nx] !== 0) return;
+
+  player.x = nx;
+  player.y = ny;
+
+  if (nx === mother.x && ny === mother.y) {
+    setTimeout(()=>{
+      alert("🐻 Reunited with Mother!");
+      location.reload();
+    },100);
+  }
+}
+
+function draw(time) {
+  TILE = canvas.width / SIZE;
+
+  /* BACKGROUND SPRITE (BIG) */
+  ctx.drawImage(bg, 0, 0, canvas.width, canvas.height);
+
+  /* WALLS */
+  ctx.fillStyle = "#000";
+  for (let y=0;y<SIZE;y++) {
+    for (let x=0;x<SIZE;x++) {
+      if (maze[y][x] === 1) {
+        ctx.fillRect(x*TILE, y*TILE, TILE, TILE);
+      }
+    }
+  }
+
+  /* MOTHER BEAR (BIGGER) */
+  ctx.drawImage(
+    motherBear,
+    mother.x*TILE + TILE*0.1,
+    mother.y*TILE + TILE*0.1,
+    TILE*0.8,
+    TILE*0.8
+  );
+
+  /* BABY BEAR (TINY) */
+  ctx.drawImage(
+    babyBear,
+    player.x*TILE + TILE*0.25,
+    player.y*TILE + TILE*0.25,
+    TILE*0.5,
+    TILE*0.5
+  );
+
+  if (moveDir && time - lastMove > 150) {
+    lastMove = time;
+    if (moveDir==="up") move(0,-1);
+    if (moveDir==="down") move(0,1);
+    if (moveDir==="left") move(-1,0);
+    if (moveDir==="right") move(1,0);
+  }
+
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+/* ---------- CONTROLS ---------- */
+document.querySelectorAll(".controls button").forEach(btn=>{
+  btn.addEventListener("pointerdown",()=> moveDir = btn.dataset.dir);
+  btn.addEventListener("pointerup",()=> moveDir = null);
+  btn.addEventListener("pointerleave",()=> moveDir = null);
+});
+
+/* ---------- KEYBOARD ---------- */
+document.addEventListener("keydown",e=>{
+  if(e.key==="ArrowUp") move(0,-1);
+  if(e.key==="ArrowDown") move(0,1);
+  if(e.key==="ArrowLeft") move(-1,0);
+  if(e.key==="ArrowRight") move(1,0);
+});
+</script>
+
+</body>
+</html>
